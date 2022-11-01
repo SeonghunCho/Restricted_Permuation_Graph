@@ -1,4 +1,3 @@
-wd <- "~/Desktop/Research/permDCEN/revision/code/"
 source("functions.R")
 #############################################################
 #' Toy example

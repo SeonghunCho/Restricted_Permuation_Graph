@@ -81,10 +81,6 @@ library(interval)
 #'          @Y = a @n X @B matrix of which each row is a rank vector of Y
 #' output : a vector of Kendall's tau values of length @B
 ########################################################
-#' 
-#' 
-setwd("~/Desktop/Research/permDCEN/revision/code/")
-
 is_possible_rank <- function(rank,A){
   n <- length(rank)
   s <- sum(sapply(1:n,function(j){
