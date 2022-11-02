@@ -81,6 +81,59 @@ library(interval)
 #'          @Y = a @n X @B matrix of which each row is a rank vector of Y
 #' output : a vector of Kendall's tau values of length @B
 ########################################################
+#'
+#' @data.gen : Generate simulation data set.
+########################################################
+#' input  : @n          = size of data set
+#'          @lam        = rate parameter of the exponential distribution
+#'          @tau        = Kendall's tau
+#'          @family     = copula model
+#'          @seed       = seed number
+#'          @cl         = left-censoring parameter
+#'          @cr         = right-censoring parameter
+#'          @lthr       = left threshold
+#'          @rthr       = right threshold
+#'          @all_cens=F, @rcens=F : interval-censored data
+#'          @all_cens=F, @rcens=T : right-censored data
+#'          @all_cens=T, @rcens=F : censored data
+#'          @all_cens=T, @rcens=T : wrong input
+#' output : @X          = @n X 5 matrix with
+#'           1st, 2nd col : left and right endpoint of the observed interval
+#'           3rd, 4th col : 0 or 1.
+#'                          (1,1) : interval-censored or not censored
+#'                          (1,0) : right-censored
+#'                          (0,1) : left-censored
+#'           5th col : L or R or I. censoring type
+#'          @Y          = @n X 5 matrix
+#'          @cens_ratio = a vector of length 2 indicating 
+#'                        the censoring rate of X and Y
+#'          @Xsamp      = a vector of length @n with complete X
+#'          @Ysamp      = a vector of length @n with complete Y
+#'          @s_tau      = Kendall's tau of @Xsamp and @Ysamp
+#'          @LR_X       = @n X 2 matrix of censoring times for X
+#'          @LR_Y       = @n X 2 matrix of censoring times for Y
+########################################################
+#'
+#' @define_df : return a data.frame, one output of @data.gen
+########################################################
+#' input  : @X    = a @n X 2 matrix of censored data
+#'          @rthr = right threshold
+#'          @lthr = left threshold
+#' output : @X    = @n X 5 matrix with
+#'           1st, 2nd col : left and right endpoint of the observed interval
+#'           3rd, 4th col : 0 or 1.
+#'                          (1,1) : interval-censored or not censored
+#'                          (1,0) : right-censored
+#'                          (0,1) : left-censored
+#'           5th col : L or R or I. censoring type
+########################################################
+#'
+#' @define_adj_mat : return the restricted permutation space
+#'                   given an output of @define_df
+########################################################
+#' input  : @xdf = an output of @define_df
+#' output : the restricted permutation space
+########################################################
 is_possible_rank <- function(rank,A){
   n <- length(rank)
   s <- sum(sapply(1:n,function(j){
@@ -244,21 +297,22 @@ calc_tau_vec <- function(X,Y){
   return(tau)
 }
 
-data.gen <- function(n=50,d=2,lam=0.1,tau=0,family="Clayton",
-                     seed=1234,cl=3.6,cr=6.0,all_cens=FALSE){
+data.gen <- function(n=50,lam=0.1,tau=0,family="Clayton",
+                     seed=1234,cl=3.6,cr=6.0,
+                     lthr=0,rthr=100,all_cens=FALSE,rcens=FALSE){
   if(!require(copula)){
     install.packages("copula")
     library(copula)
   }
   set.seed(seed)
   if(tau==0){
-    X <- rexp(n,rate=lam)
-    Y <- rexp(n,rate=lam)
+    X = rexp(n,rate=lam)
+    Y = rexp(n,rate=lam)
   }else{
     # copula parameter
     alpha <- iTau(archmCopula(family), tau)
     # define the copula to sample
-    cop <- archmCopula(family, param = alpha, dim = d)
+    cop <- archmCopula(family, param = alpha, dim = 2)
     # sample
     U <- rCopula(n, cop)
     X <- log(1-U[,1])/(-lam)
@@ -271,36 +325,62 @@ data.gen <- function(n=50,d=2,lam=0.1,tau=0,family="Clayton",
   Ly <- runif(n,0,cl)
   Qy <- runif(n,0,cr)
   Ry <- Ly + Qy
-  x_cen <- sum(X > Lx & X <= Rx)/n
-  y_cen <- sum(Y > Ly & Y <= Ry)/n
-  Xl <- X
-  Xr <- X
-  Yl <- Y
-  Yr <- Y
-  ind_x <- X>Lx & X < Rx
-  ind_y <- Y>Ly & Y < Ry
-  Xl[ind_x] <- Lx[ind_x]
-  Xr[ind_x] <- Rx[ind_x]
-  Yl[ind_y] <- Ly[ind_y]
-  Yr[ind_y] <- Ry[ind_y]
-  if(all_cens==TRUE){
+  if(!all_cens & !rcens){
+    x_cen <- sum(X > Lx & X <= Rx)/n
+    y_cen <- sum(Y > Ly & Y <= Ry)/n
+    Xl <- X
+    Xr <- X
+    Yl <- Y
+    Yr <- Y
+    ind_x <- X>Lx & X < Rx
+    ind_y <- Y>Ly & Y < Ry
+    Xl[ind_x] <- Lx[ind_x]
+    Xr[ind_x] <- Rx[ind_x]
+    Yl[ind_y] <- Ly[ind_y]
+    Yr[ind_y] <- Ry[ind_y]
+  }else if(rcens){
+    x_cen <- sum(X > Rx)/n
+    y_cen <- sum(Y > Ry)/n
+    Xl <- X
+    Xr <- X
+    Yl <- Y
+    Yr <- Y
+    ind_x <- X > Rx
+    ind_y <- Y > Ry
+    Xl[ind_x] <- Rx[ind_x]
+    Xr[ind_x] <- rthr
+    Yl[ind_y] <- Ry[ind_y]
+    Yr[ind_y] <- rthr
+  }else if(all_cens){
+    x_cen <- 1
+    y_cen <- 1
+    Xl <- X
+    Xr <- X
+    Yl <- Y
+    Yr <- Y
     ind_x <- X<= Lx
     ind_y <- Y<= Ly
-    Xl[ind_x] <- -100
+    Xl[ind_x] <- lthr
     Xr[ind_x] <- Lx[ind_x]
-    Yl[ind_y] <- -100
+    Yl[ind_y] <- lthr
     Yr[ind_y] <- Ly[ind_y]
     ind_x <- X > Rx
     ind_y <- Y > Ry
     Xl[ind_x] <- Rx[ind_x]
-    Xr[ind_x] <- 100
+    Xr[ind_x] <- rthr
     Yl[ind_y] <- Ry[ind_y]
-    Yr[ind_y] <- 100
+    Yr[ind_y] <- rthr
+    ind_x <- X>Lx & X <= Rx
+    ind_y <- Y>Ly & Y <= Ry
+    Xl[ind_x] <- Lx[ind_x]
+    Xr[ind_x] <- Rx[ind_x]
+    Yl[ind_y] <- Ly[ind_y]
+    Yr[ind_y] <- Ry[ind_y]
   }
   Xmat <- cbind(Xl,Xr)
   Ymat <- cbind(Yl,Yr)
-  xdf <- define_df(Xmat)
-  ydf <- define_df(Ymat)
+  xdf <- define_df(Xmat,rthr=rthr,lthr=lthr)
+  ydf <- define_df(Ymat,rthr=rthr,lthr=lthr)
   return(list(X=xdf,Y=ydf,cens_ratio=c(x_cen,y_cen),
               Xsamp=X,Ysamp=Y,s_tau=s_tau,
               LR_X=cbind(Lx,Rx),LR_Y=cbind(Ly,Ry)))

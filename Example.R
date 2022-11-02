@@ -4,14 +4,18 @@ source("functions.R")
 #############################################################
 ## setting
 n <- 50 # sample size
-d <- 2
 lam <- 0.1
 family <- "Clayton" # copula family
 tau <- 0.2
 cl <- 3.9
 cr <- 6.0
+rcens <- F
+all_cens <- F
+lthr <- 0
+rthr <- 100
 ## data generation
-dat <- data.gen(n=n,d=d,lam=lam,tau=tau,family=family,seed=1234,cl=cl,cr=cr)
+dat <- data.gen(n=n,lam=lam,tau=tau,family=family,seed=1234,cl=cl,cr=cr,
+                lthr=lthr,rthr=rthr,all_cens=all_cens,rcens=rcens)
 xdf <- dat$X
 ydf <- dat$Y
 Ax <- define_adj_mat(xdf)
